@@ -9,6 +9,21 @@ var WebSock = require('faye-websocket');
 
 //Various utility stuff
 
+function dumpError(err) {
+  if (typeof err === 'object') {
+    if (err.message) {
+      console.log('\nMessage: ' + err.message)
+    }
+    if (err.stack) {
+      console.log('\nStacktrace:')
+      console.log('====================')
+      console.log(err.stack);
+    }
+  } else {
+    console.log('dumpError :: argument is not an object');
+  }
+}
+
 function debug(e) {
   if(e.stack) {
     util.debug(e + '\n' + e.stack);
@@ -336,6 +351,10 @@ function stringify(m) {
 //  m.headers['content-length'] = (m.content || '').length;
 
   for(var n in m.headers) {
+    if(!m.headers[n]) {
+      continue;
+    }
+
     if(typeof m.headers[n] === 'string' || !stringifiers[n]) 
       s += n + ': ' + m.headers[n] + '\r\n';
     else
@@ -360,6 +379,7 @@ function makeResponse(rq, status, reason) {
     headers: {
       via: rq.headers.via,
       to: rq.headers.to,
+      contact: rq.headers.contact,
       from: rq.headers.from,
       'call-id': rq.headers['call-id'],
       cseq: rq.headers.cseq
@@ -456,6 +476,7 @@ function parseMessage(s) {
 exports.parse = parseMessage;
 
 function makeWsTransport(options, callback) {
+  util.debug('makeWsTransport with '+util.inspect(options));
 	var connections = Object.create(null);
 
 	function init(ws, remote) {
@@ -480,7 +501,8 @@ function makeWsTransport(options, callback) {
 				ws.send(m);
 			}
 			catch(e) {
-				process.nextTick(stream.emit.bind(stream, 'error', e));
+        dumpError(e);
+        process.nextTick(stream.emit.bind(stream, 'error', e));
 			}
 		}
 
@@ -492,12 +514,15 @@ function makeWsTransport(options, callback) {
 		});
 		ws.onmessage = function(event) { return parser(event.data); }
 
-		ws.onclose = function() { delete connections[id]; }
+		ws.onclose = function() {
+      util.debug("onClose");
+      delete connections[id];
+    }
 //		ws.onerror = function() {};
 //		stream.on('end',      function() { if(refs === 0) ws.close(); });
-		stream.on('timeout',  function() { if(refs === 0) ws.close(); });
+		stream.on('timeout',  function() { if(refs === 0) { util.debug("timeout"); }});
 //		http.on('connect',  function() { pending.splice(0).forEach(send); });
-		stream.setTimeout(60000);   
+		stream.setTimeout(0);
 
 		connections[id] = function(onError) {
 			++refs;
@@ -506,7 +531,7 @@ function makeWsTransport(options, callback) {
 			return {
 				release	: function() {
 					if (onError) ws.onerror = null;
-					if(--refs <= 0) ws.close();
+					if(--refs <= 0) { util.debug("release"); }
 				},
 				send	: send,
 				local	: local
@@ -527,7 +552,6 @@ function makeWsTransport(options, callback) {
 		var stream = ws._stream;
     	init(ws, {protocol: 'WS', address: stream.remoteAddress, port: stream.remotePort});
 	});
-
 	http.listen(options.port || 5060, options.address);
 
 	return {
@@ -537,11 +561,12 @@ function makeWsTransport(options, callback) {
 				// We can't make outbound websocket connections yet
 				return null;
 		},
-		destroy: function() { http.close(); }
+		destroy: function() { util.debug("destroy"); http.close(); }
 	}
 }
 
 function makeTcpTransport(options, callback) {
+  util.debug('makeTcpTransport with '+util.inspect(options));
   var connections = Object.create(null);
 
   function init(stream, remote) {
@@ -570,6 +595,7 @@ function makeTcpTransport(options, callback) {
 	  	//console.log("TCP SEND: "+m.toString());
         stream.write(m, 'ascii');
       } catch(e) {
+        dumpError(e);
         process.nextTick(stream.emit.bind(stream, 'error', e));
       }
     }
@@ -631,6 +657,7 @@ function makeTcpTransport(options, callback) {
 }
 
 function makeUdpTransport(options, callback) {
+  util.debug('makeUdpTransport with '+util.inspect(options));
   function onMessage(data, rinfo) {
     var msg = parseMessage(data);
     if (!msg) return;
@@ -711,7 +738,7 @@ function makeTransport(options, callback) {
     open: function(target, error) {
       return protocols[target.protocol.toUpperCase()].open(target, error);
     },
-    send: function(target, message) {
+    send: function(message, target) {
       var cn = this.open(target);
       cn.send(message);
       cn.release();
@@ -1104,9 +1131,10 @@ function makeTransactionLayer(options, transport) {
               });
             }
             catch(e) {
+              dumpError(e);
               var errorLog = (options.logger && options.logger.error) || function(e) { console.error(e); };
-              errorLog("Caught exception: "+e.stack); 
-              onresponse(makeResponse(rq, 503));  
+              errorLog("Caught exception: "+e);
+              onresponse(makeResponse(rq, 503));
             }
           }
           else
@@ -1147,9 +1175,10 @@ exports.create = function(options, callback) {
           try {
             callback(m,remote);
           } catch(e) {
+            dumpError(e);
             t.send(makeResponse(m, '500', 'Internal Server Error'));
             throw e;
-          } 
+          }
         }
         else if(m.method === 'ACK') {
           callback(m,remote);
@@ -1158,10 +1187,11 @@ exports.create = function(options, callback) {
       else {
         t.message && t.message(m, remote);
       }
-    } 
+    }
     catch(e) {
+      dumpError(e);
       var errorLog = (options.logger && options.logger.error) || function(e) { console.error(e); };
-      errorLog("Caught exception: "+e.stack); 
+      errorLog("Caught exception: "+e);
     }
   });
   if (!transport) return false;
@@ -1177,6 +1207,8 @@ exports.create = function(options, callback) {
         t && t.send && t.send(m);
       }
       else {
+        var uri = parseUri(m.uri);
+        util.debug('send to '+uri.host+':'+uri.port);
         if(m.method === 'ACK') {
           if(!m.headers.via) m.headers.via = [];
 
@@ -1207,4 +1239,3 @@ exports.start = function(options, callback) {
   exports.stop = r.destroy;
   return r;
 }
-

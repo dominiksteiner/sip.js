@@ -1,7 +1,7 @@
 // Simple proxy server with registrar function.
 
-var sip = require('sip');
-var proxy = require('sip/proxy');
+var sip = require('sipws');
+var proxy = require('sipws/proxy');
 var util = require('sys');
 
 var contacts = {};

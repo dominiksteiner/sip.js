@@ -1,4 +1,4 @@
-var sip=require('sip');
+var sip=require('sipws');
 var util=require('util');
 
 var contexts = {};

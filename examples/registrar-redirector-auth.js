@@ -1,8 +1,8 @@
 // Simple registrar - redirector with authentication
 //
 
-var sip = require('sip');
-var digest = require('sip/digest');
+var sip = require('sipws');
+var digest = require('sipws/digest');
 var util = require('util');
 var os = require('os');
 

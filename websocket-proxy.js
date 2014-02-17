@@ -1,4 +1,5 @@
-var sip	= require('./sip.js');
+var sip	= require('sipws');
+var util = require('util');
 
 var contexts = {};
 
@@ -39,7 +40,8 @@ function Proxy(options, route) {
 	}
 
 	self.send = function(msg, callback) {
-  		var ctx = contexts[makeContextId(msg)];
+    var contextId = makeContextId(msg);
+  		var ctx = contexts[contextId];
 		if (!ctx) return trans.send.apply(trans, arguments);
 		return msg.method
 			? self.forwardRequest(ctx, msg, callback || self.defaultCallback)
@@ -47,7 +49,8 @@ function Proxy(options, route) {
 	}
  
 	self.forwardRequest = function(ctx, req, callback) {
-		self.send(req, function(res, rem) {
+    util.debug("forwardRequest : "+req.method);
+    trans.send(req, function(res, rem) {
 			var via = res.headers.via[0];
 			if (+res.status < 200) {
 				ctx.cancellers[via.params.branch] = function() { self.sendCancel(req, via); };
@@ -61,7 +64,8 @@ function Proxy(options, route) {
 	}
 
 	self.forwardResponse = function(ctx, res, callback) {
-		if (+res.status >= 200) delete contexts[makeContextId(res)];
+    util.debug("forwardResponse : "+res.status);
+    if (+res.status >= 200) delete contexts[makeContextId(res)];
 		trans.send(res);
 	}
 

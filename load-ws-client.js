@@ -27,7 +27,7 @@ var viaHost = rstring()+".invalid";
 var branch = rstring();
 var host = "cbridge1.exarionetworks.com";
 var contactUser = rstring();
-var websocket = {address:'0.0.0.0', port:5063};
+var websocket = {address:'0.0.0.0', port:8060};
 
 function createRegisterMsg(user) {
   var contact = "<sip:"+contactUser+"@"+viaHost+";transport=ws>";

@@ -127,12 +127,15 @@ client.onopen = function(event) {
   this.send(registerMsg);
 };
 client.onmessage = function(event) {
-  if(event.data.toString().match(/CSeq:.*REGISTER/i)) {
-    console.log('ignoring REGISTER response from wrs1 : ' + event.data.toString());
+  var req = event.data.toString();
+  if(req.match(/CSeq:.*REGISTER/i)) {
+    console.log('ignoring REGISTER response from wrs1 : ' + req);
     return;
   }
-  console.log('TO WRS2 : ', event.data.toString());
-  client2.send(event.data.toString());
+  console.log('before TO WRS2', req);
+  req = req.replace(/(Contact:.*\r\n)/, '');
+  console.log('TO WRS2 : ', req);
+  client2.send(req);
   // ws.close(1002, 'Going away');
 };
 client.onclose = function(event) {
@@ -147,7 +150,8 @@ client2.onopen = function(event) {
 };
 client2.onmessage = function(event) {
   var req = event.data.toString();
-  req = req.replace(/(Contact:.*@)(.*)(:.*)/, '$1'+os.hostname()+'$3');
+  console.log('before TO WRS1', req);
+  req = req.replace(/(Contact:.*\r\n)/, '');
   console.log('TO WRS1', req);
 
   client.send(req);

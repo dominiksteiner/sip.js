@@ -22,18 +22,15 @@ function newUUID() {
   return UUID;
 }
 
-var instanceId = newUUID();
 var viaHost = rstring()+".invalid";
 var branch = rstring();
 var host = "cbridge1.exarionetworks.com";
-var contactUser = rstring();
+var user = "1000";
 var websocket = {address:'0.0.0.0', port:8060};
+var wrs2Contact = null;
 
 function createRegisterMsg(user) {
-  var contact = "<sip:"+contactUser+"@"+viaHost+";transport=ws>";
-  contact += ';reg-id=1';
-  contact += ';+sip.instance="<urn:uuid:'+ instanceId +'>"';
-  contact += ';expires=600';
+  var contact = createContact();
 
   var msg = {
     method: 'REGISTER',
@@ -47,9 +44,17 @@ function createRegisterMsg(user) {
       Contact: contact  // if your call doesnt get in-dialog request, maybe os.hostname() isn't resolving in your ip address
     }
   }
-  return sip.stringify(msg);
+  return msg;
 }
 
+function createContact() {
+  var contactUser = rstring();
+  var contact = "<sip:"+contactUser+"@"+viaHost+";transport=ws>";
+  contact += ';reg-id=1';
+  contact += ';+sip.instance="<urn:uuid:'+ newUUID() +'>"';
+  contact += ';expires=600';
+  return contact;
+}
 //var proxy = new WSProxy(websocket, route);
 //console.log("Listening for WebSocket connections on: "+websocket.address+":"+websocket.port);
 
@@ -122,9 +127,10 @@ console.log('Connecting websocket client to ' + client2.url);
 
 client.onopen = function(event) {
   console.log('connected to wrs1');
-  var registerMsg = createRegisterMsg('1000');
-  console.log('registering to  wrs1 : '+registerMsg);
-  this.send(registerMsg);
+  registerMsg = createRegisterMsg(user);
+  var registerStr = sip.stringify(registerMsg);
+  console.log('registering to  wrs1 : '+registerStr);
+  this.send(registerStr);
 };
 client.onmessage = function(event) {
   var req = event.data.toString();
@@ -133,7 +139,8 @@ client.onmessage = function(event) {
     return;
   }
   console.log('before TO WRS2', req);
-  req = req.replace(/(Contact:.*\r\n)/, '');
+  wrs2Contact = wrs2Contact || createContact();
+  req = req.replace(/(Contact:.*)/, "Contact:"+wrs2Contact);
   console.log('TO WRS2 : ', req);
   client2.send(req);
   // ws.close(1002, 'Going away');
@@ -151,7 +158,7 @@ client2.onopen = function(event) {
 client2.onmessage = function(event) {
   var req = event.data.toString();
   console.log('before TO WRS1', req);
-  req = req.replace(/(Contact:.*\r\n)/, '');
+  req = req.replace(/(Contact:.*)/, "Contact:"+registerMsg.headers.Contact);
   console.log('TO WRS1', req);
 
   client.send(req);

@@ -2,6 +2,43 @@ var sip = require('sipws');
 var WSProxy = require('sipws/websocket-proxy');
 var util = require('sys');
 
+var Sequelize = require('sequelize')
+  , sequelize = new Sequelize('sipws', 'root', 'root', {
+    dialect: "mysql", // or 'sqlite', 'postgres', 'mariadb'
+    port:    3306 // or 5432 (for postgres)
+  });
+
+sequelize
+  .authenticate()
+  .complete(function(err) {
+    if (!!err) {
+      console.log('Unable to connect to the database:', err)
+    } else {
+      console.log('Connection has been established successfully.')
+    }
+  });
+
+var Registration = sequelize.define("Registration", {
+  "remote_address": Sequelize.STRING,
+  "remote_port": Sequelize.INTEGER,
+  "contact_uri": Sequelize.STRING,
+  "contact_user": Sequelize.STRING,
+  "to_user": Sequelize.STRING
+}, {
+  tableName: 'registrations', // this will define the table's name
+  timestamps: false           // this will deactivate the timestamp columns
+  });
+
+sequelize
+  .sync({ force: true })
+  .complete(function(err) {
+    if (!!err) {
+      console.log('An error occurred while create the table:', err)
+    } else {
+      console.log('It worked!')
+    }
+  })
+
 // Where to listen for WebSocket connections
 var websocket = {address:'0.0.0.0', port:5062};
 // Where to bind the SIP tranport
@@ -13,8 +50,6 @@ var websocket = {address:'0.0.0.0', port:5062};
 
 // Create WebSocket proxy
 var proxy = new WSProxy(websocket, route);
-
-var contacts = {};
 
 console.log("Listening for WebSocket connections on: "+websocket.address+":"+websocket.port);
 //console.log("SIP transport bound on: "+sipbind.address+":"+sipbind.port);
@@ -35,36 +70,56 @@ function route(proxy, req, rem) {
 //	req.uri += ';transport=tcp';
 
   if(req.method === 'REGISTER') {
-    var user = sip.parseUri(req.headers.to.uri).user;
-    var contact = {contact: req.headers.contact, remote: rem};
-    var contactUser = sip.parseUri(req.headers.contact[0].uri).user;
-    console.log('Registering user '+user+' with contact '+contactUser);
-    contacts[user] = contact;
-    contacts[contactUser] = contact;
-    var rs = sip.makeResponse(req, 200, 'OK');
-    console.log('Response : '+rs.status);
-    rs.headers.to.tag = Math.floor(Math.random() * 1e6);
+    var toUser = sip.parseUri(req.headers.to.uri).user;
+    var contactUri = req.headers.contact[0].uri;
+    var contactUser = sip.parseUri(contactUri).user;
+    console.log('Registering user '+toUser+' with contact '+contactUser);
+    Registration
+      .findOrCreate(Sequelize.or(
+      { contact_user: contactUser }, { to_user: toUser }
+    ))
+      .success(function(registration, created) {
+        console.log((created ? 'Persisted' : 'Updated')+' registration for '+contactUri+' at '+rem.address+':'+rem.port);
+        registration.remote_address = rem.address;
+        registration.remote_port = rem.port;
+        registration.contact_uri = contactUri;
+        registration.contact_user = contactUser;
+        registration.to_user = toUser;
+        registration.save();
 
-    // Notice  _proxy.send_ not sip.send
-    proxy.send(rs);
+        var rs = sip.makeResponse(req, 200, 'OK');
+        console.log('Response : '+rs.status);
+        rs.headers.to.tag = Math.floor(Math.random() * 1e6);
+
+        // Notice  _proxy.send_ not sip.send
+        proxy.send(rs);
+      });
   }
   else {
     var user = sip.parseUri(req.uri).user;
-    console.log('Looking for user : '+user);
-    if(contacts[user]) {
-      req.uri = sip.parseUri(contacts[user].contact[0].uri);
-      req.uri.host = contacts[user].remote.address;
-      req.uri.port = contacts[user].remote.port;
+    console.log('Finding registration for user : '+user);
+    Registration
+      .find({ where:  Sequelize.or(
+      { contact_user: user },
+      { to_user: user }
+    ) })
+      .complete(function(err, registration) {
+        if (!!err) {
+          console.log('An error occurred while searching for '+user+':', err)
+        } else if (!registration) {
+          console.log('No registration for '+user+' has been found.')
+          proxy.send(sip.makeResponse(req, 404, 'Not Found'));
+        } else {
+          req.uri = sip.parseUri(registration.contact_uri);
+          req.uri.host = registration.remote_address;
+          req.uri.port = registration.remote_port;
 
-      proxy.send(sip.makeResponse(req, 100, 'Trying'));
+          proxy.send(sip.makeResponse(req, 100, 'Trying'));
 
-      console.log('Sending request for user '+user+' to '+req.uri);
-      proxy.send(req);
-    }
-    else {
-      console.log('User '+user+" not found");
-      proxy.send(sip.makeResponse(req, 404, 'Not Found'));
-    }
+          console.log('Sending request for user '+user+' to '+req.uri.host+":"+req.uri.port);
+          proxy.send(req);
+        }
+      });
   }
 
 

@@ -4,7 +4,12 @@
   "version": "0.1.1-2",
   "homepage": "https://github.com/markwebster/sip.js",
   "author": "Kirill Mikhailov <kirill.mikhailov@gmail.com>",
-  "contributors": [ { "name": "Mark Webster", "email": "mark.webster@gmail.com" } ],
+  "contributors": [
+    {
+      "name": "Mark Webster",
+      "email": "mark.webster@gmail.com"
+    }
+  ],
   "main": "sip",
   "directories": {
     "lib": "",
@@ -18,10 +23,19 @@
   "engines": {
     "node": ">=0.2.2"
   },
-  "dependencies" : {
-	"faye-websocket" : "*"
+  "dependencies": {
+    "faye-websocket": "*",
+    "sequelize": "~1.7.0",
+    "mysql": "~2.1.1"
   },
-  "keywords" : [
-	"websocket", "sip", "sipml5", "webrtc", "proxy"
-  ]
+  "keywords": [
+    "websocket",
+    "sip",
+    "sipml5",
+    "webrtc",
+    "proxy"
+  ],
+  "devDependencies": {
+    "persist": "~0.2.7"
+  }
 }

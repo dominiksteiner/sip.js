@@ -2,12 +2,16 @@ var sip = require('sipws');
 var WSProxy = require('sipws/websocket-proxy');
 var util = require('sys');
 var restify = require('restify');
+var fs = require('fs');
 
 var ip_addr = '0.0.0.0';
 var port    =  '5063';
 
 var server = restify.createServer({
   name : "sipws-webservice"
+  // enable for https support
+//  ,key: fs.readFileSync('/var/exario/ssl/domain_key_dominik.exarionetworks.com.pem')
+//  ,certificate: fs.readFileSync('/var/exario/ssl/domain_cert_dominik.exarionetworks.com.pem')
 });
 
 server.listen(port ,ip_addr, function(){

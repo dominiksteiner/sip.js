@@ -3,7 +3,7 @@ var WSProxy = require('sipws/websocket-proxy');
 var util = require('sys');
 var restify = require('restify');
 
-var ip_addr = '127.0.0.1';
+var ip_addr = '0.0.0.0';
 var port    =  '5063';
 
 var server = restify.createServer({

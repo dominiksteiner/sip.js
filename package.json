@@ -26,7 +26,8 @@
   "dependencies": {
     "faye-websocket": "*",
     "sequelize": "~1.7.0",
-    "mysql": "~2.1.1"
+    "mysql": "~2.1.1",
+    "restify": "~2.6.3"
   },
   "keywords": [
     "websocket",

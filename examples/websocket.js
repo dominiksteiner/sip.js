@@ -1,6 +1,25 @@
 var sip = require('sipws');
 var WSProxy = require('sipws/websocket-proxy');
 var util = require('sys');
+var restify = require('restify');
+
+var ip_addr = '127.0.0.1';
+var port    =  '5063';
+
+var server = restify.createServer({
+  name : "sipws-webservice"
+});
+
+server.listen(port ,ip_addr, function(){
+  console.log('%s listening at %s ', server.name , server.url);
+});
+
+server.use(restify.queryParser());
+server.use(restify.bodyParser());
+server.use(restify.CORS());
+
+var PATH = '/registrations'
+server.get({path : PATH +'/:user' , version : '0.0.1'} , findRegistration);
 
 var Sequelize = require('sequelize')
   , sequelize = new Sequelize('sipws', 'root', 'root', {
@@ -121,9 +140,29 @@ function route(proxy, req, rem) {
         }
       });
   }
-
-
 }
 
+function findRegistration(req, res , next){
+  var user = req.params.user;
+  res.setHeader('Access-Control-Allow-Origin','*');
+  Registration
+    .find({ where:  Sequelize.or(
+    { contact_user: user },
+    { to_user: user }
+  ) })
+    .complete(function(err, registration) {
+      if(err){
+        return next(err);
+      }
+      else if (!registration) {
+        console.log('No registration for '+user+' has been found.')
+        res.send(404);
+        return next();
+      } else {
+        res.send(200, registration);
+        return next();
+      }
+    });
+}
 
 

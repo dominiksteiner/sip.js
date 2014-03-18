@@ -65,23 +65,26 @@ sequelize
 // Where to listen for WebSocket connections
 var websocket = {address:'0.0.0.0', port:5062};
 // Where to bind the SIP tranport
-//var sipbind = {address:'0.0.0.0', port:5060};
+var sipbind = {address:'0.0.0.0', port:5060};
 
 // Create SIP transport
-//var trans = sip.create({tcp:true, udp:true, address:sipbind.address, port:sipbind.port},
-//		handler);
+var trans = sip.create({tcp:true, udp:false, address:sipbind.address, port:sipbind.port},
+		handler);
 
 // Create WebSocket proxy
 var proxy = new WSProxy(websocket, route);
 
 console.log("Listening for WebSocket connections on: "+websocket.address+":"+websocket.port);
-//console.log("SIP transport bound on: "+sipbind.address+":"+sipbind.port);
+console.log("SIP transport bound on: "+sipbind.address+":"+sipbind.port);
 
 
 function handler(req, rem) {
-	// Incoming out-of-dialog request from remote SIP UAC
-	// ...
-	// which we aren't supporting right now
+  console.log('SIP request ['+req.method+' '+req.uri+'] from '+rem.address+":"+rem.port);
+  if(req.method === 'REGISTER') {
+    register(req, rem, function(rs){
+      trans.send(rs);
+    });
+  }
 }
 
 function route(proxy, req, rem) {
@@ -93,30 +96,9 @@ function route(proxy, req, rem) {
 //	req.uri += ';transport=tcp';
 
   if(req.method === 'REGISTER') {
-    var toUser = sip.parseUri(req.headers.to.uri).user;
-    var contactUri = req.headers.contact[0].uri;
-    var contactUser = sip.parseUri(contactUri).user;
-    console.log('Registering user '+toUser+' with contact '+contactUser);
-    Registration
-      .findOrCreate(Sequelize.or(
-      { contact_user: contactUser }, { to_user: toUser }
-    ))
-      .success(function(registration, created) {
-        console.log((created ? 'Persisted' : 'Updated')+' registration for '+contactUri+' at '+rem.address+':'+rem.port);
-        registration.remote_address = rem.address;
-        registration.remote_port = rem.port;
-        registration.contact_uri = contactUri;
-        registration.contact_user = contactUser;
-        registration.to_user = toUser;
-        registration.save();
-
-        var rs = sip.makeResponse(req, 200, 'OK');
-        console.log('Response : '+rs.status);
-        rs.headers.to.tag = Math.floor(Math.random() * 1e6);
-
-        // Notice  _proxy.send_ not sip.send
-        proxy.send(rs);
-      });
+    register(req, rem, function(rs){
+      proxy.send(rs);
+    });
   }
   else {
     var user = sip.parseUri(req.uri).user;
@@ -159,7 +141,7 @@ function findRegistration(req, res , next){
         return next(err);
       }
       else if (!registration) {
-        console.log('No registration for '+user+' has been found.')
+        console.log('No registration for '+user+' has been found.');
         res.send(404);
         return next();
       } else {
@@ -167,6 +149,33 @@ function findRegistration(req, res , next){
         return next();
       }
     });
+}
+
+function register(req, rem, successCallback) {
+  var toUser = sip.parseUri(req.headers.to.uri).user;
+  var contactUri = req.headers.contact[0].uri;
+  var contactUser = sip.parseUri(contactUri).user;
+  console.log('Registering user '+toUser+' with contact '+contactUser);
+  Registration
+    .findOrCreate(Sequelize.or(
+    { contact_user: contactUser }, { to_user: toUser }
+  ))
+    .success(function(registration, created) {
+      console.log((created ? 'Persisted' : 'Updated')+' registration for '+contactUri+' at '+rem.address+':'+rem.port);
+      registration.remote_address = rem.address;
+      registration.remote_port = rem.port;
+      registration.contact_uri = contactUri;
+      registration.contact_user = contactUser;
+      registration.to_user = toUser;
+      registration.save();
+
+      var rs = sip.makeResponse(req, 200, 'OK');
+      console.log('Response : '+rs.status);
+      rs.headers.to.tag = Math.floor(Math.random() * 1e6);
+
+      successCallback(rs);
+    });
+
 }
 
 

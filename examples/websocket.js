@@ -1,29 +1,6 @@
 var sip = require('sipws');
 var WSProxy = require('sipws/websocket-proxy');
 var util = require('sys');
-var restify = require('restify');
-var fs = require('fs');
-
-var ip_addr = '0.0.0.0';
-var port    =  '5063';
-
-var server = restify.createServer({
-  name : "sipws-webservice"
-  // enable for https support
-//  ,key: fs.readFileSync('/var/exario/ssl/domain_key_dominik.exarionetworks.com.pem')
-//  ,certificate: fs.readFileSync('/var/exario/ssl/domain_cert_dominik.exarionetworks.com.pem')
-});
-
-server.listen(port ,ip_addr, function(){
-  console.log('%s listening at %s ', server.name , server.url);
-});
-
-server.use(restify.queryParser());
-server.use(restify.bodyParser());
-server.use(restify.CORS());
-
-var PATH = '/registrations'
-server.get({path : PATH +'/:user' , version : '0.0.1'} , findRegistration);
 
 var Sequelize = require('sequelize')
   , sequelize = new Sequelize('sipws', 'root', 'root', {
@@ -68,7 +45,7 @@ var websocket = {address:'0.0.0.0', port:5062};
 var sipbind = {address:'0.0.0.0', port:5060};
 
 // Create SIP transport
-var trans = sip.create({tcp:true, udp:false, address:sipbind.address, port:sipbind.port},
+var trans = sip.create({tcp:true, udp:true, address:sipbind.address, port:sipbind.port},
 		handler);
 
 // Create WebSocket proxy
@@ -122,7 +99,12 @@ function route(proxy, req, rem) {
           proxy.send(sip.makeResponse(req, 100, 'Trying'));
 
           console.log('Sending request for user '+user+' to '+req.uri.host+":"+req.uri.port);
-          proxy.send(req);
+          var transport = req.uri.params.transport;
+          if(transport === 'ws' || transport === 'WS') {
+            proxy.send(req);
+          } else {
+            trans.send(req);
+          }
         }
       });
   }
